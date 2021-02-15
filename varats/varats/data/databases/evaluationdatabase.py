@@ -116,10 +116,10 @@ class EvaluationDatabase(abc.ABC):
         Return:
             a pandas dataframe with the given columns and the
         """
-        if cls.__name__ == "Database":
+        if cls.__name__ == "EvaluationDatabase":
             raise AssertionError(
                 "You must not call this function on the "
-                "'Database' base class."
+                "'EvaluationDatabase' base class."
             )
 
         if not case_studies:
