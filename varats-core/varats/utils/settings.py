@@ -160,6 +160,10 @@ _CFG['provider'] = {
     "github_access_token": {
         "desc": "GitHub access token",
         "default": None,
+    },
+    "osv_api_token": {
+        "desc": "OSV API token",
+        "default": None,
     }
 }
 

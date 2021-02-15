@@ -15,6 +15,9 @@ from benchbuild.utils.revision_ranges import (
     SingleRevision,
 )
 
+from varats.utils.exceptions import ConfigurationError
+from varats.utils.settings import vara_cfg
+
 LOG = logging.getLogger(__name__)
 
 
@@ -275,8 +278,9 @@ def __osv_api_query_vulnerabilities(
     if not commit and not version:
         raise AssertionError("Must specify either commit or version")
 
-    # todo: get api key
-    api_key: str = ""
+    api_key = vara_cfg()["provider"]["osv_api_token"].value
+    if not api_key:
+        raise ConfigurationError("Could not find OSV API token.")
 
     payload = {"package": package.as_dict()}
     if commit:
