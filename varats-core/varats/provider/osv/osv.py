@@ -16,6 +16,7 @@ from benchbuild.utils.revision_ranges import (
 )
 
 from varats.utils.exceptions import ConfigurationError
+from varats.utils.rate_limit import rate_limit
 from varats.utils.settings import vara_cfg
 
 LOG = logging.getLogger(__name__)
@@ -255,6 +256,17 @@ def __parse_osv_ranges(range_obj: OSVRangeJSON) -> tp.Set[OSVRange]:
     return ranges
 
 
+def get_osv_vulnerabilities(package: OSVPackageInfo,
+                            commits: tp.List[str]) -> tp.Set[OSVVulnerability]:
+    vulnerabilities: tp.Set[OSVVulnerability] = set()
+
+    for commit in commits:
+        vulnerabilities.update(
+            __osv_api_query_vulnerabilities(package, commit=commit)
+        )
+    return vulnerabilities
+
+
 def __osv_api_query_vulnerabilities(
     package: OSVPackageInfo,
     commit: tp.Optional[str] = None,
@@ -290,8 +302,14 @@ def __osv_api_query_vulnerabilities(
 
     payload_str = json.dumps(payload)
 
-    result = curl["-X", "POST", "-d", f"'{payload_str}'",
-                  __QUERY_URL.format(api_key=api_key)]
+    @rate_limit(100, 60)
+    def query_api() -> str:
+        return curl(
+            "-X", "POST", "-d", f"'{payload_str}'",
+            __QUERY_URL.format(api_key=api_key)
+        )
+
+    result = query_api()
     result_json: tp.Dict[str, tp.Any] = json.loads(result)
     if "vulns" not in result_json.keys():
         LOG.warning(
