@@ -17,14 +17,11 @@ from varats.project.project_util import (
     verify_binaries,
 )
 from varats.provider.cve.cve_provider import CVEProviderHook
-from varats.provider.release.release_provider import (
-    ReleaseProviderHook,
-    ReleaseType,
-)
+from varats.provider.release.release_provider import ReleaseType
 from varats.utils.settings import bb_cfg
 
 
-class Gzip(bb.Project, ReleaseProviderHook, CVEProviderHook):  # type: ignore
+class Gzip(bb.Project, CVEProviderHook):  # type: ignore
     """Compression and decompression tool Gzip (fetched by Git)"""
 
     NAME = 'gzip'
@@ -85,6 +82,7 @@ class Gzip(bb.Project, ReleaseProviderHook, CVEProviderHook):  # type: ignore
 
             verify_binaries(self)
 
+    # implement the ReleaseProviderHook protocol
     @classmethod
     def get_release_revisions(
         cls, release_type: ReleaseType

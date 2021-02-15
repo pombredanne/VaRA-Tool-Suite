@@ -1,4 +1,5 @@
 """Module for the :class:`ReleaseProvider`."""
+import sys
 import typing as tp
 from enum import Enum
 
@@ -8,6 +9,13 @@ from packaging.version import parse as parse_version
 
 from varats.project.project_util import get_tagged_commits
 from varats.provider.provider import Provider
+
+if sys.version_info <= (3, 8):
+    from typing_extensions import Protocol
+    from typing_extensions import runtime_checkable
+else:
+    from typing import Protocol
+    from typing import runtime_checkable
 
 
 class ReleaseType(Enum):
@@ -42,7 +50,8 @@ class ReleaseType(Enum):
         return self if self.value >= other.value else other
 
 
-class ReleaseProviderHook():
+@runtime_checkable
+class ReleaseProviderHook(Protocol):
     """
     Gives the :class:`ReleaseProvider` the necessary information how to find the
     releases for a project.
@@ -60,7 +69,7 @@ class ReleaseProviderHook():
         Returns:
             a list of tuples of hashes and version strings of release commits
         """
-        raise NotImplementedError("Must be overridden by the project.")
+        ...
 
 
 class ReleaseProvider(Provider):
@@ -68,7 +77,7 @@ class ReleaseProvider(Provider):
 
     def __init__(self, project: tp.Type[Project]) -> None:
         super().__init__(project)
-        if hasattr(project, "get_release_revisions"):
+        if isinstance(project, ReleaseProviderHook):
             self.hook = tp.cast(ReleaseProviderHook, project)
         else:
             raise ValueError(
@@ -80,7 +89,7 @@ class ReleaseProvider(Provider):
     def create_provider_for_project(
         cls, project: tp.Type[Project]
     ) -> tp.Optional['ReleaseProvider']:
-        if hasattr(project, "get_release_revisions"):
+        if isinstance(project, ReleaseProviderHook):
             return ReleaseProvider(project)
         return None
 
