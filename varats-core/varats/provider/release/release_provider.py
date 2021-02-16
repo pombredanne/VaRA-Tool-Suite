@@ -78,7 +78,7 @@ class ReleaseProvider(Provider):
     def __init__(self, project: tp.Type[Project]) -> None:
         super().__init__(project)
         if isinstance(project, ReleaseProviderHook):
-            self.hook = tp.cast(ReleaseProviderHook, project)
+            self.hook: ReleaseProviderHook = project
         else:
             raise ValueError(
                 f"Project {project} does not implement "

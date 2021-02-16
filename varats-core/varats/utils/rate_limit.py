@@ -6,6 +6,8 @@ from time import time, sleep
 
 LOG = logging.getLogger(__name__)
 
+RetType = tp.TypeVar("RetType")
+
 
 class _RateLimiter():
 
@@ -14,12 +16,13 @@ class _RateLimiter():
         self.__timeframe = timeframe_seconds
 
         self.__num_invocations = 0
-        self.__first_invocation: tp.Optional = None
+        self.__first_invocation: tp.Optional[float] = None
 
-    def __call__(self, func) -> tp.Callable[..., None]:
+    def __call__(self, func: tp.Callable[...,
+                                         RetType]) -> tp.Callable[..., RetType]:
 
         @wraps(func)
-        def wrapper(*args: tp.Any, **kwargs: tp.Any) -> tp.Any:
+        def wrapper(*args: tp.Any, **kwargs: tp.Any) -> RetType:
             now = time()
             if not self.__first_invocation:
                 self.__first_invocation = now
@@ -36,12 +39,12 @@ class _RateLimiter():
                     self.__first_invocation = None
 
             self.__num_invocations += 1
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
 
         return wrapper
 
 
-def rate_limit(max_invocations: int, timeframe_seconds: float):
+def rate_limit(max_invocations: int, timeframe_seconds: float) -> _RateLimiter:
     """
     Rate-limit calls to a function. If more than ``max_invocations`` occur in
     the ``timeframe_seconds``, the decorator will sleep until the end of

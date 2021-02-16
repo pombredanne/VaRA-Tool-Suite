@@ -49,7 +49,7 @@ class OSVPackageInfo():
         """
         return self.__ecosystem
 
-    def as_dict(self):
+    def as_dict(self) -> tp.Dict[str, str]:
         """
         Return a dictionary representation of this object.
 
@@ -75,8 +75,8 @@ class OSVRange():
         self, introduced_in: AbstractRevisionRange,
         fixed_in: AbstractRevisionRange
     ):
-        self.__introduced_in: introduced_in
-        self.__fixed_in: fixed_in
+        self.__introduced_in = introduced_in
+        self.__fixed_in = fixed_in
 
     @property
     def introduced_in(self) -> AbstractRevisionRange:
@@ -86,7 +86,7 @@ class OSVRange():
         Returns:
             the introducing commit (range).
         """
-        return self.introduced_in
+        return self.__introduced_in
 
     @property
     def fixed_in(self) -> AbstractRevisionRange:
@@ -96,7 +96,7 @@ class OSVRange():
         Returns:
             the fixing commit (range).
         """
-        return self.fixed_in
+        return self.__fixed_in
 
 
 class OSVSeverity(Enum):
@@ -112,12 +112,12 @@ class OSVVulnerability():
     """A vulnerability as described by OSV."""
 
     def __init__(
-        self, id: str, package: OSVPackageInfo, summary: str, details: str,
+        self, osv_id: str, package: OSVPackageInfo, summary: str, details: str,
         severity: OSVSeverity, affected_versions: tp.Set[str],
         affected_ranges: tp.Set[OSVRange], reference_urls: tp.List[str],
         cves: tp.List[str]
     ):
-        self.__id = id
+        self.__osv_id = osv_id
         self.__package: OSVPackageInfo = package
         self.__summary = summary
         self.__details = details
@@ -128,7 +128,7 @@ class OSVVulnerability():
         self.__cves = cves
 
     @property
-    def id(self) -> str:
+    def osv_id(self) -> str:
         """
         Unique identifier for this vulnerability (assigned by OSV). This is of
         the format YEAR-N (e.g. "2020-111").
@@ -136,7 +136,7 @@ class OSVVulnerability():
         Returns:
             unique identifier for this vulnerability
         """
-        return self.__id
+        return self.__osv_id
 
     @property
     def package(self) -> OSVPackageInfo:
@@ -223,10 +223,10 @@ class OSVVulnerability():
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, OSVVulnerability):
             return False
-        return self.id == o.id
+        return self.osv_id == o.osv_id
 
     def __hash__(self) -> int:
-        return hash(self.id)
+        return hash(self.osv_id)
 
 
 __QUERY_URL = "https://api.osv.dev/v1/query?key={api_key}"
@@ -294,7 +294,7 @@ def __osv_api_query_vulnerabilities(
     if not api_key:
         raise ConfigurationError("Could not find OSV API token.")
 
-    payload = {"package": package.as_dict()}
+    payload: tp.Dict[str, tp.Any] = {"package": package.as_dict()}
     if commit:
         payload["commit"] = commit
     if version:
@@ -304,14 +304,16 @@ def __osv_api_query_vulnerabilities(
 
     @rate_limit(100, 60)
     def query_api() -> str:
-        return curl(
-            "-X", "POST", "-d", f"'{payload_str}'",
-            __QUERY_URL.format(api_key=api_key)
+        return str(
+            curl(
+                "-X", "POST", "-d", payload_str,
+                __QUERY_URL.format(api_key=api_key)
+            )
         )
 
     result = query_api()
     result_json: tp.Dict[str, tp.Any] = json.loads(result)
-    if "vulns" not in result_json.keys():
+    if "code" in result_json.keys():
         LOG.warning(
             f"Error response from OSV API: "
             f"(error code {result_json.get('code', '?')}) "
@@ -320,7 +322,7 @@ def __osv_api_query_vulnerabilities(
         return []
 
     vulnerabilities: tp.List[OSVVulnerability] = []
-    for entry in result_json["vulns"]:
+    for entry in result_json.get("vulns", []):
         vulnerabilities.append(
             OSVVulnerability(
                 entry["id"],
@@ -328,7 +330,7 @@ def __osv_api_query_vulnerabilities(
                     entry["package"]["name"],
                     entry["package"].get("ecosystem", None)
                 ), entry["summary"], entry["details"],
-                OSVSeverity.get(entry["severity"], OSVSeverity.NONE),
+                OSVSeverity[entry["severity"]],
                 set(entry["affects"].get("versions", [])),
                 __parse_osv_ranges(entry["affects"]["ranges"]),
                 entry.get("referenceUrls", None), entry.get("cves", None)

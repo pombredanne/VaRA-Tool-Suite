@@ -54,12 +54,12 @@ from varats.utils.git_util import (
 class OSVDatabase():
     """Database for OSV vulnerabilities."""
 
-    CACHE_ID = "osv_vulnerabilities"
-    COLUMNS = ["osv_id", "severity", "affected_ranges"]
+    CACHE_ID: str = "osv_vulnerabilities"
+    COLUMNS: tp.List[str] = ["osv_id", "severity", "affected_ranges"]
 
     @staticmethod
     def _vulnerability_id(vulnerability: OSVVulnerability) -> str:
-        return vulnerability.id
+        return vulnerability.osv_id
 
     @staticmethod
     def _vulnerability_timestamp(vulnerability: OSVVulnerability) -> str:
@@ -124,10 +124,12 @@ class OSVDatabase():
 
             return (
                 pd.DataFrame({
-                    "osv_id": vulnerability.id,
+                    "osv_id": vulnerability.osv_id,
                     "severity": vulnerability.severity,
                     "affected_ranges": ranges_str
-                }), OSVDatabase._vulnerability_id(vulnerability),
+                },
+                             index=[vulnerability.osv_id]),
+                OSVDatabase._vulnerability_id(vulnerability),
                 OSVDatabase._vulnerability_timestamp(vulnerability)
             )
 
@@ -138,7 +140,7 @@ class OSVDatabase():
         # cls.CACHE_ID is set by superclass
         # pylint: disable=E1101
         data_frame = build_cached_report_table(
-            cls.CACHE_ID, project_name, vulnerabilities, [],
+            cls.CACHE_ID, project_name, list(vulnerabilities), [],
             create_dataframe_layout, create_dataframe_from_vulnerability,
             OSVDatabase._vulnerability_id, OSVDatabase._vulnerability_timestamp,
             OSVDatabase._compare_timestamps

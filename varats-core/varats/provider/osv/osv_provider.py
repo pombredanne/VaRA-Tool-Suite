@@ -48,7 +48,7 @@ class OSVProvider(Provider):
     def __init__(self, project: tp.Type[Project]) -> None:
         super().__init__(project)
         if isinstance(project, OSVProviderHook):
-            self.hook = tp.cast(OSVProviderHook, project)
+            self.hook: OSVProviderHook = project
         else:
             raise ValueError(
                 f"Project {project} does not implement "
@@ -78,7 +78,7 @@ class OSVProvider(Provider):
             the available OSV vulnerabilities
         """
         package_info = self.hook.get_osv_package_info()
-        release_provider = ReleaseProvider.create_provider_for_project(
+        release_provider = ReleaseProvider.get_provider_for_project(
             self.project
         )
         # We use the release commits instead of version strings, since commits
