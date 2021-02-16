@@ -12,8 +12,11 @@ from varats.project.project_util import (
     ProjectBinaryWrapper,
     BinaryType,
     verify_binaries,
+    get_tagged_commits,
 )
 from varats.provider.cve.cve_provider import CVEProviderHook
+from varats.provider.osv.osv import OSVPackageInfo
+from varats.provider.release.release_provider import ReleaseType
 from varats.utils.settings import bb_cfg
 
 
@@ -66,3 +69,15 @@ class Curl(bb.Project, CVEProviderHook):  # type: ignore
     @classmethod
     def get_cve_product_info(cls) -> tp.List[tp.Tuple[str, str]]:
         return [("Haxx", "Curl")]
+
+    @classmethod
+    def get_osv_package_info(cls) -> OSVPackageInfo:
+        return OSVPackageInfo("curl")
+
+    @classmethod
+    def get_release_revisions(
+        cls, release_type: ReleaseType
+    ) -> tp.List[tp.Tuple[str, str]]:
+        tagged_commits = get_tagged_commits(cls.NAME)
+        releases = [(commit, tag, tag) for commit, tag in tagged_commits]
+        return [(commit, tag) for commit, tag, version in releases]
