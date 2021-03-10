@@ -5,6 +5,7 @@ import plotly.graph_objs as gob
 import plotly.offline as offply
 import pygit2
 
+from varats.data.reports.szz_report import SZZUnleashedReport
 from varats.plot.plot import Plot
 from varats.project.project_util import (
     get_project_cls_by_name,
@@ -12,6 +13,7 @@ from varats.project.project_util import (
 )
 from varats.provider.bug.bug import RawBug
 from varats.provider.bug.bug_provider import BugProvider
+from varats.revision.revisions import get_processed_revisions_files
 
 
 def _plot_chord_diagram_for_raw_bugs(
@@ -209,7 +211,20 @@ class BugFixingRelationPlot(Plot):
         if view_mode:
             figure.show()
         else:
-            offply.plot(figure, filename=self.plot_file_name(""))
+            offply.plot(figure, filename=self.plot_file_name("html"))
+
+        reports = get_processed_revisions_files(
+            project_name, SZZUnleashedReport
+        )
+        figure = _plot_chord_diagram_for_raw_bugs(
+            project_name,
+            SZZUnleashedReport(reports[0]).get_all_raw_bugs()
+        )
+        # filename must be left empty for plot command
+        if view_mode:
+            figure.show()
+        else:
+            offply.plot(figure, filename=self.plot_file_name("html"))
 
     def calc_missing_revisions(self, boundary_gradient: float) -> tp.Set[str]:
         return set()
