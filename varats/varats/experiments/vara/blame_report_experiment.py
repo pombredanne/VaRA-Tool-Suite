@@ -10,7 +10,7 @@ from pathlib import Path
 
 import benchbuild.utils.actions as actions
 from benchbuild import Project
-from benchbuild.utils.cmd import mkdir, opt
+from benchbuild.utils.cmd import mkdir, opt, time
 from benchbuild.utils.requirements import Requirement, SlurmMem
 
 import varats.experiments.vara.blame_experiment as BE
@@ -38,8 +38,12 @@ class BlameReportGeneration(actions.Step):  # type: ignore
     def __init__(
         self,
         project: Project,
+        report_type,
+        with_time=False,
     ):
         super().__init__(obj=project, action_fn=self.analyze)
+        self.report_type = report_type
+        self.with_time = with_time
 
     def analyze(self) -> actions.StepResult:
         """
@@ -65,7 +69,7 @@ class BlameReportGeneration(actions.Step):  # type: ignore
         mkdir("-p", vara_result_folder)
 
         for binary in project.binaries:
-            result_file = BR.get_file_name(
+            result_file = self.report_type.get_file_name(
                 project_name=str(project.name),
                 binary_name=binary.name,
                 project_version=project.version_of_primary,
@@ -87,10 +91,15 @@ class BlameReportGeneration(actions.Step):  # type: ignore
 
             run_cmd = wrap_unlimit_stack_size(run_cmd)
 
+            if self.with_time:
+                run_cmd = time["-v", "-o",
+                               f"{vara_result_folder}/{result_file}.time",
+                               run_cmd]
+
             exec_func_with_pe_error_handler(
                 run_cmd,
                 create_default_analysis_failure_handler(
-                    project, BR, Path(vara_result_folder)
+                    project, self.report_type, Path(vara_result_folder)
                 )
             )
 
@@ -131,7 +140,48 @@ class BlameReportExperiment(VersionExperiment):
             )
         )
 
-        analysis_actions.append(BlameReportGeneration(project))
+        analysis_actions.append(BlameReportGeneration(project, BR))
+        analysis_actions.append(actions.Clean(project))
+
+        return analysis_actions
+
+
+class BlameReportExperimentFilter2015(VersionExperiment):
+    """TODO: write me"""
+
+    NAME = "GenerateBlameReportF2015"
+
+    REPORT_TYPE = BR
+    REQUIREMENTS: tp.List[Requirement] = [SlurmMem("250G")]
+
+    def actions_for_project(self, project: Project) -> tp.List[actions.Step]:
+        """
+        Returns the specified steps to run the project(s) specified in the call
+        in a fixed order.
+
+        Args:
+            project: to analyze
+        """
+        # Try, to build the project without optimizations to get more precise
+        # blame annotations. Note: this does not guarantee that a project is
+        # build without optimizations because the used build tool/script can
+        # still add optimizations flags after the experiment specified cflags.
+        project.cflags += ["-O1", "-Xclang", "-disable-llvm-optzns", "-g0"]
+        bc_file_extensions = [BCFileExtensions.NO_OPT, BCFileExtensions.TBAA]
+
+        BE.setup_basic_blame_experiment(
+            self, project, BR, BlameReportGeneration.RESULT_FOLDER_TEMPLATE
+        )
+
+        analysis_actions = BE.generate_basic_blame_experiment_actions(
+            project,
+            bc_file_extensions,
+            extraction_error_handler=create_default_compiler_error_handler(
+                project, self.REPORT_TYPE
+            )
+        )
+
+        analysis_actions.append(BlameReportGeneration(project, BR, True))
         analysis_actions.append(actions.Clean(project))
 
         return analysis_actions
