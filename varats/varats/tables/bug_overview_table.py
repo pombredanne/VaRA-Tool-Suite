@@ -63,7 +63,7 @@ class BugFixingEvaluationTable(Table):
 
     Provide a file with true fixing commits as an extra argument `fixes_path`,
     else the list of true fixing commits will be considered none. Set extra
-    argument `max_date` to set a maximum date to consider bugs for.
+    argument `starting_from` to set a date from when to consider bug fixes.
     """
 
     NAME = "bug_fixing_evaluation"
@@ -74,9 +74,9 @@ class BugFixingEvaluationTable(Table):
     def tabulate(self) -> str:
         project_name = self.table_kwargs["project"]
         fixes_file_name = self.table_kwargs.get("fixes_path", "")
-        max_date = datetime(
-            self.table_kwargs["max_date"]
-        ) if "max_date" in self.table_kwargs else date.today()
+        start_date = datetime(
+            self.table_kwargs["starting_from"]
+        ) if "starting_from" in self.table_kwargs else date.today()
 
         input_fixing_commits: tp.Set[str] = set()
         with open(fixes_file_name) as input_file:
@@ -102,13 +102,13 @@ class BugFixingEvaluationTable(Table):
             rawbug_pygit_fix = project_repo.revparse_single(
                 rawbug.fixing_commit
             )
-            if rawbug_pygit_fix.commit_time <= max_date:
+            if rawbug_pygit_fix.commit_time >= start_date:
                 found_fixing_commits.add(rawbug.fixing_commit)
 
         true_fixing_commits: tp.Set[str] = set()
         for commit_hash in input_fixing_commits:
             input_pygit_fix = project_repo.revparse_single(commit_hash)
-            if input_pygit_fix.commit_time <= max_date:
+            if input_pygit_fix.commit_time >= start_date:
                 true_fixing_commits.add(commit_hash)
 
         found_non_fixing_commits: tp.Set[str] = set()
@@ -116,7 +116,7 @@ class BugFixingEvaluationTable(Table):
             project_repo.head.target.hex,
             pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE
         ):
-            if commit.commit_time > max_date:
+            if commit.commit_time < start_date:
                 break
             if commit.hex not in found_fixing_commits:
                 found_non_fixing_commits.add(commit.hex)
