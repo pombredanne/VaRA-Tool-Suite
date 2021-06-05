@@ -113,8 +113,7 @@ class BugFixingEvaluationTable(Table):
 
         found_non_fixing_commits: tp.Set[str] = set()
         for commit in project_repo.walk(
-            project_repo.head.target.hex,
-            pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE
+            project_repo.head.target.hex, pygit2.GIT_SORT_TIME
         ):
             if commit.commit_time < start_date:
                 break
