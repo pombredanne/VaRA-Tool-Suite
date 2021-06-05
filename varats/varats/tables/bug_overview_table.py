@@ -12,6 +12,7 @@ from varats.project.project_util import (
     get_project_cls_by_name,
     get_local_project_git,
 )
+from varats.provider.bug.bug import RawBug, PygitBug
 from varats.provider.bug.bug_provider import BugProvider
 from varats.table.table import Table, TableFormat, wrap_table_in_document
 
@@ -88,74 +89,18 @@ class BugFixingEvaluationTable(Table):
         bug_provider = BugProvider.get_provider_for_project(
             get_project_cls_by_name(project_name)
         )
-        project_repo = get_local_project_git(project_name)
 
         variables = [
-            "true fixes", "fixes found", "true positive", "false positive",
-            "true negative", "false negative"
+            "commits total", "true fixes", "fixes found", "true positive",
+            "false positive", "true negative", "false negative"
         ]
         rawbugs = bug_provider.find_all_raw_bugs()
 
-        # sets of commit hashes for each category
-        found_fixing_commits: tp.Set[str] = set()
-        for rawbug in rawbugs:
-            rawbug_pygit_fix = project_repo.revparse_single(
-                rawbug.fixing_commit
+        data = [
+            _compute_fixing_evaluation_row(
+                project_name, start_date, rawbugs, input_fixing_commits
             )
-            if datetime.datetime.fromtimestamp(
-                rawbug_pygit_fix.commit_time
-            ) >= start_date:
-                found_fixing_commits.add(rawbug.fixing_commit)
-
-        true_fixing_commits: tp.Set[str] = set()
-        for commit_hash in input_fixing_commits:
-            input_pygit_fix = project_repo.revparse_single(commit_hash)
-            if datetime.datetime.fromtimestamp(
-                input_pygit_fix.commit_time
-            ) >= start_date:
-                true_fixing_commits.add(commit_hash)
-
-        found_non_fixing_commits: tp.Set[str] = set()
-        for commit in project_repo.walk(
-            project_repo.head.target.hex, pygit2.GIT_SORT_TIME
-        ):
-            if datetime.datetime.fromtimestamp(commit.commit_time) < start_date:
-                break
-            if commit.hex not in found_fixing_commits:
-                found_non_fixing_commits.add(commit.hex)
-
-        # count bugs that are correctly labelled as fixing
-        tp_commits = set()
-        for commit in found_fixing_commits:
-            if commit in true_fixing_commits:
-                tp_commits.add(commit)
-
-        #count bugs that are incorrectly labelled as fixing
-        fp_commits = set()
-        for commit in found_fixing_commits:
-            if commit not in true_fixing_commits:
-                fp_commits.add(commit)
-
-        #count bugs that are correctly not labelled as fixing
-        tn_commits = set()
-        for commit in found_non_fixing_commits:
-            if commit not in true_fixing_commits:
-                tn_commits.add(commit)
-
-        #count bugs that are incorrectly not labelled as fixing
-        fn_commits = set()
-        for commit in found_non_fixing_commits:
-            if commit in true_fixing_commits:
-                fn_commits.add(commit)
-
-        data = [[
-            len(true_fixing_commits),
-            len(found_fixing_commits),
-            len(tp_commits),
-            len(fp_commits),
-            len(tn_commits),
-            len(fn_commits)
-        ]]
+        ]
 
         eval_df = pd.DataFrame(data=np.array(data), columns=variables)
 
@@ -168,3 +113,89 @@ class BugFixingEvaluationTable(Table):
 
     def wrap_table(self, table: str) -> str:
         return wrap_table_in_document(table=table, landscape=True)
+
+
+class BugIntroducingEvaluationTable(Table):
+    """Visualizes different metrics on introducing commits of bugs without
+    ground truth."""
+
+    NAME = "bug_introducing_evaluation"
+
+    def __init__(self, **kwargs: tp.Any):
+        super().__init__(self.NAME, **kwargs)
+
+    def tabulate(self) -> str:
+        pass
+
+    def wrap_table(self, table: str) -> str:
+        return wrap_table_in_document(table=table, landscape=True)
+
+
+def _compute_fixing_evaluation_row(
+    project_name: str, start_date: datetime.datetime,
+    rawbugs: tp.FrozenSet[RawBug], input_fixing_commits: tp.Set[str]
+) -> tp.List[int]:
+    project_repo = get_local_project_git(project_name)
+
+    # sets of commit hashes for each category
+    found_fixing_commits: tp.Set[str] = set()
+    for rawbug in rawbugs:
+        rawbug_pygit_fix = project_repo.revparse_single(rawbug.fixing_commit)
+        if datetime.datetime.fromtimestamp(
+            rawbug_pygit_fix.commit_time
+        ) >= start_date:
+            found_fixing_commits.add(rawbug.fixing_commit)
+
+    true_fixing_commits: tp.Set[str] = set()
+    for commit_hash in input_fixing_commits:
+        input_pygit_fix = project_repo.revparse_single(commit_hash)
+        if datetime.datetime.fromtimestamp(
+            input_pygit_fix.commit_time
+        ) >= start_date:
+            true_fixing_commits.add(commit_hash)
+
+    # also count total commits here
+    commit_count = 0
+    found_non_fixing_commits: tp.Set[str] = set()
+    for commit in project_repo.walk(
+        project_repo.head.target.hex, pygit2.GIT_SORT_TIME
+    ):
+        if datetime.datetime.fromtimestamp(commit.commit_time) < start_date:
+            break
+        if commit.hex not in found_fixing_commits:
+            found_non_fixing_commits.add(commit.hex)
+        commit_count = commit_count + 1
+
+    # count bugs that are correctly labelled as fixing
+    tp_commits = set()
+    for commit in found_fixing_commits:
+        if commit in true_fixing_commits:
+            tp_commits.add(commit)
+
+    # count bugs that are incorrectly labelled as fixing
+    fp_commits = set()
+    for commit in found_fixing_commits:
+        if commit not in true_fixing_commits:
+            fp_commits.add(commit)
+
+    # count bugs that are correctly not labelled as fixing
+    tn_commits = set()
+    for commit in found_non_fixing_commits:
+        if commit not in true_fixing_commits:
+            tn_commits.add(commit)
+
+    # count bugs that are incorrectly not labelled as fixing
+    fn_commits = set()
+    for commit in found_non_fixing_commits:
+        if commit in true_fixing_commits:
+            fn_commits.add(commit)
+
+    return [
+        commit_count,
+        len(true_fixing_commits),
+        len(found_fixing_commits),
+        len(tp_commits),
+        len(fp_commits),
+        len(tn_commits),
+        len(fn_commits)
+    ]
