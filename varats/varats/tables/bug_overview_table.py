@@ -74,16 +74,16 @@ class BugFixingEvaluationTable(Table):
     def tabulate(self) -> str:
         project_name = self.table_kwargs["project"]
         fixes_file_name = self.table_kwargs.get("fixes_path", "")
-        start_date = datetime(
-            self.table_kwargs["starting_from"]
+        #Format for starting_from parameter: month/day/year
+        start_date = datetime.datetime.strptime(
+            self.table_kwargs["starting_from"], '%m/%d/%Y'
         ) if "starting_from" in self.table_kwargs else date.today()
 
         input_fixing_commits: tp.Set[str] = set()
         with open(fixes_file_name) as input_file:
-            lines: tp.List[str] = input_file.readlines()
-            for line in lines:
-                if line != "":
-                    input_fixing_commits.add(line)
+            input_fixing_commits: tp.Set[str] = set(
+                line.rstrip() for line in input_file
+            )
 
         bug_provider = BugProvider.get_provider_for_project(
             get_project_cls_by_name(project_name)
@@ -102,20 +102,24 @@ class BugFixingEvaluationTable(Table):
             rawbug_pygit_fix = project_repo.revparse_single(
                 rawbug.fixing_commit
             )
-            if rawbug_pygit_fix.commit_time >= start_date:
+            if datetime.datetime.fromtimestamp(
+                rawbug_pygit_fix.commit_time
+            ) >= start_date:
                 found_fixing_commits.add(rawbug.fixing_commit)
 
         true_fixing_commits: tp.Set[str] = set()
         for commit_hash in input_fixing_commits:
             input_pygit_fix = project_repo.revparse_single(commit_hash)
-            if input_pygit_fix.commit_time >= start_date:
+            if datetime.datetime.fromtimestamp(
+                input_pygit_fix.commit_time
+            ) >= start_date:
                 true_fixing_commits.add(commit_hash)
 
         found_non_fixing_commits: tp.Set[str] = set()
         for commit in project_repo.walk(
             project_repo.head.target.hex, pygit2.GIT_SORT_TIME
         ):
-            if commit.commit_time < start_date:
+            if datetime.datetime.fromtimestamp(commit.commit_time) < start_date:
                 break
             if commit.hex not in found_fixing_commits:
                 found_non_fixing_commits.add(commit.hex)
