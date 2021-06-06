@@ -1,7 +1,7 @@
 """Module for writing bug-data metrics tables."""
-import datetime
+import statistics
 import typing as tp
-from datetime import date
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
@@ -76,7 +76,7 @@ class BugFixingEvaluationTable(Table):
         project_name = self.table_kwargs["project"]
         fixes_file_name = self.table_kwargs.get("fixes_path", "")
         #Format for starting_from parameter: month/day/year
-        start_date = datetime.datetime.strptime(
+        start_date = datetime.strptime(
             self.table_kwargs["starting_from"], '%m/%d/%Y'
         ) if "starting_from" in self.table_kwargs else date.today()
 
@@ -125,33 +125,50 @@ class BugIntroducingEvaluationTable(Table):
         super().__init__(self.NAME, **kwargs)
 
     def tabulate(self) -> str:
-        pass
+        project_name = self.table_kwargs["project"]
+
+        bug_provider = BugProvider.get_provider_for_project(
+            get_project_cls_by_name(project_name)
+        )
+        pybugs = bug_provider.find_all_pygit_bugs()
+
+        variables = ["message bugs", "issue bugs", "realism of intro."]
+
+        data = [_compute_introducing_evaluation(pybugs)]
+
+        eval_df = pd.DataFrame(data=data, columns=variables)
+
+        if self.format in [
+            TableFormat.latex, TableFormat.latex_raw, TableFormat.latex_booktabs
+        ]:
+            tex_code = eval_df.to_latex(bold_rows=True, multicolumn_format="c")
+            return str(tex_code) if tex_code else ""
+        return tabulate(eval_df, eval_df.columns, self.format.value)
 
     def wrap_table(self, table: str) -> str:
         return wrap_table_in_document(table=table, landscape=True)
 
 
 def _compute_fixing_evaluation_row(
-    project_name: str, start_date: datetime.datetime,
-    rawbugs: tp.FrozenSet[RawBug], input_fixing_commits: tp.Set[str]
+    project_name: str, start_date: datetime, rawbugs: tp.FrozenSet[RawBug],
+    input_fixing_commits: tp.Set[str]
 ) -> tp.List[int]:
+    """
+    Format: commits total, true fixes, fixes found, tp, fp, tn, fn
+    """
     project_repo = get_local_project_git(project_name)
 
     # sets of commit hashes for each category
     found_fixing_commits: tp.Set[str] = set()
     for rawbug in rawbugs:
         rawbug_pygit_fix = project_repo.revparse_single(rawbug.fixing_commit)
-        if datetime.datetime.fromtimestamp(
-            rawbug_pygit_fix.commit_time
-        ) >= start_date:
+        if datetime.fromtimestamp(rawbug_pygit_fix.commit_time) >= start_date:
             found_fixing_commits.add(rawbug.fixing_commit)
 
     true_fixing_commits: tp.Set[str] = set()
     for commit_hash in input_fixing_commits:
         input_pygit_fix = project_repo.revparse_single(commit_hash)
-        if datetime.datetime.fromtimestamp(
-            input_pygit_fix.commit_time
-        ) >= start_date:
+        if datetime.fromtimestamp(input_pygit_fix.commit_time) >= start_date:
             true_fixing_commits.add(commit_hash)
 
     # also count total commits here
@@ -160,7 +177,7 @@ def _compute_fixing_evaluation_row(
     for commit in project_repo.walk(
         project_repo.head.target.hex, pygit2.GIT_SORT_TIME
     ):
-        if datetime.datetime.fromtimestamp(commit.commit_time) < start_date:
+        if datetime.fromtimestamp(commit.commit_time) < start_date:
             break
         if commit.hex not in found_fixing_commits:
             found_non_fixing_commits.add(commit.hex)
@@ -199,3 +216,27 @@ def _compute_fixing_evaluation_row(
         len(tn_commits),
         len(fn_commits)
     ]
+
+
+def _compute_introducing_evaluation(
+    pybugs: tp.FrozenSet[PygitBug]
+) -> tp.List[int]:
+    """
+    Format: commit message bugs, issue event bugs, realism of bug introduction
+    (in days)
+    """
+    message_bugs = 0
+    issue_bugs = 0
+    date_differences: tp.List[int] = []
+    for pybug in pybugs:
+        if pybug.issue_id:
+            issue_bugs = issue_bugs + 1
+        else:
+            message_bugs = message_bugs + 1
+
+        fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
+        for introducer in pybug.introducing_commits:
+            intro_date = datetime.fromtimestamp(introducer.commit_time)
+            date_differences.append((fixing_date - intro_date).days)
+
+    return [message_bugs, issue_bugs, statistics.median(date_differences)]
