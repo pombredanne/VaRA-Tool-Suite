@@ -134,7 +134,7 @@ class BugIntroducingEvaluationTable(Table):
 
         variables = ["message bugs", "issue bugs", "realism of intro."]
 
-        data = [_compute_introducing_evaluation(pybugs)]
+        data = [_compute_introducing_evaluation_row(pybugs)]
 
         eval_df = pd.DataFrame(data=data, columns=variables)
 
@@ -218,7 +218,7 @@ def _compute_fixing_evaluation_row(
     ]
 
 
-def _compute_introducing_evaluation(
+def _compute_introducing_evaluation_row(
     pybugs: tp.FrozenSet[PygitBug]
 ) -> tp.List[int]:
     """
