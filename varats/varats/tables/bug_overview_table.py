@@ -117,8 +117,13 @@ class BugFixingEvaluationTable(Table):
 
 
 class BugIntroducingEvaluationTable(Table):
-    """Visualizes different metrics on introducing commits of bugs without
-    ground truth."""
+    """
+    Visualizes different metrics on introducing commits of bugs without ground
+    truth.
+
+    Set extra argument `starting_from` to set a date from when to consider bug
+    fixes.
+    """
 
     NAME = "bug_introducing_evaluation"
 
@@ -128,6 +133,10 @@ class BugIntroducingEvaluationTable(Table):
     def tabulate(self) -> str:
         project_name = self.table_kwargs["project"]
 
+        start_date = datetime.strptime(
+            self.table_kwargs["starting_from"], '%m/%d/%Y'
+        ) if "starting_from" in self.table_kwargs else date.today()
+
         bug_provider = BugProvider.get_provider_for_project(
             get_project_cls_by_name(project_name)
         )
@@ -136,10 +145,35 @@ class BugIntroducingEvaluationTable(Table):
         variables = [
             "realism of intro.", "realism of intro. %",
             "future impact time span", "future impact time span %",
-            "future impact count %"
+            "future impact count", "future impact count %"
         ]
 
-        data = []
+        pybug_filtered = _get_bugs_fixed_after_threshold(pybugs, start_date)
+
+        med_tuple_realism = _compute_realism_of_introduction(pybug_filtered)
+        med_tuple_impact_time_span = _compute_future_impact_time_span(
+            pybug_filtered
+        )
+        med_tuple_impact_count = _compute_future_impact_count(pybug_filtered)
+
+        passed_realism = _get_passing_fraction_realism_of_introduction(
+            project_name, pybug_filtered, med_tuple_realism[0],
+            med_tuple_realism[1]
+        )
+        passed_impact_time_span = _get_passing_fraction_future_impact_time_span(
+            project_name, pybug_filtered, med_tuple_impact_time_span[0],
+            med_tuple_impact_time_span[1]
+        )
+        passed_impact_count = _get_passing_fraction_future_impact_count(
+            project_name, pybug_filtered, med_tuple_impact_count[0],
+            med_tuple_impact_count[1]
+        )
+
+        data = [
+            med_tuple_realism[0], passed_realism, med_tuple_impact_time_span[0],
+            passed_impact_time_span, med_tuple_impact_count[0],
+            passed_impact_count
+        ]
 
         eval_df = pd.DataFrame(data=data, columns=variables)
 
@@ -225,24 +259,102 @@ def _evaluate_fixing_commits(
 
 
 def _get_passing_fraction_future_impact_count(
-    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many introducing commits pass the future
     impact threshold (count of future bugs)."""
+    intro_dict = _get_intro_dict(project_name, pybugs)
+
+    passing_intros: int = 0
+    for introducer, fixing_commits in intro_dict:
+        if len(fixing_commits) <= median + mad:
+            passing_intros = passing_intros + 1
+
+    return float(passing_intros) / float(intro_dict.keys())
 
 
 def _get_passing_fraction_future_impact_time_span(
-    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many introducing commits pass the future
     impact threshold (time span of future bugs)."""
+    intro_dict = _get_intro_dict(project_name, pybugs)
+
+    passing_intros = 0
+    for introducer, fixing_commits in intro_dict:
+        introducer_pycommit: pygit2.Commit = project_repo.revparse_single(
+            introducer
+        )
+
+        passed = True
+        for fix in fixing_commits:
+            fixing_pycommit: pygit2.Commit = project_repo.revparse_single(fix)
+
+            introducer_date = datetime.fromtimestamp(
+                introducer_pycommit.commit_time
+            )
+            fixing_date = datetime.fromtimestamp(fixing_pycommit.commit_time)
+
+            if (abs(fixing_date - introducer_date).days > median + mad):
+                passed = False
+                break
+
+        if passed:
+            passing_intros = passing_intros + 1
+
+    return float(passing_intros) / float(intro_dict.keys())
 
 
 def _get_passing_fraction_realism_of_introduction(
-    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many fixing commits pass the realism of bug
     introduction threshold."""
+    passing_fixes = 0
+    for pybug in pybugs:
+        passed = True
+        for introducer_a in pybug.introducing_commits:
+            intro_a_date = datetime.fromtimestamp(introducer_a.commit_time)
+            for introducer_b in pybug.introducing_commits:
+                intro_b_date = datetime.fromtimestamp(introducer_b.commit_time)
+
+                if (abs(intro_b_date - intro_a_date).days > median + mad):
+                    passed = False
+
+        if passed:
+            passing_fixes = passing_fixes + 1
+
+    return float(passing_fixes) / float(len(pybugs))
+
+
+def _get_intro_dict(
+    project_name: str, pybugs: tp.FrozenSet[PygitBug]
+) -> tp.Dict[str, tp.Set[str]]:
+    intro_dict: tp.Dict[str, tp.Set[str]] = {}
+    project_repo = get_local_project_git(project_name)
+
+    for pybug in pybugs:
+        fix_hash = pybug.fixing_commit.hex
+        for introducer in pybug.introducing_commits:
+            intro_hash = introducer.hex
+            if intro_hash not in intro_dict.keys():
+                intro_dict[intro_hash] = set()
+            intro_dict[intro_hash].add(fix_hash)
+
+    return intro_dict
+
+
+def _get_bugs_fixed_after_threshold(
+    pybugs: tp.FrozenSet[PygitBug], start_date: datetime
+) -> tp.FrozenSet[PygitBug]:
+    resulting_pybugs: tp.Set[PygitBug] = set()
+
+    for pybug in pybugs:
+        fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
+        if fixing_date < start_date:
+            resulting_pybugs.add(pybug)
+
+    return frozenset(resulting_pybugs)
 
 
 def _count_commit_message_and_issue_event_bugs(
