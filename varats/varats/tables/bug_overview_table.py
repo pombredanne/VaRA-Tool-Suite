@@ -101,15 +101,7 @@ class BugFixingEvaluationTable(Table):
             project_name, start_date, rawbugs, input_fixing_commits
         )
 
-        data = [
-            fixing_eval[0],
-            len(input_fixing_commits),
-            len(rawbugs),
-            len(fixing_eval[1]),
-            len(fixing_eval[2]),
-            len(fixing_eval[3]),
-            len(fixing_eval[4])
-        ]
+        data = [len(fixing_eval[i]) for i in range(len(variables))]
 
         eval_df = pd.DataFrame(data=np.array(data), columns=variables)
 
@@ -141,7 +133,11 @@ class BugIntroducingEvaluationTable(Table):
         )
         pybugs = bug_provider.find_all_pygit_bugs()
 
-        variables = ["message bugs", "issue bugs", "realism of intro."]
+        variables = [
+            "realism of intro.", "realism of intro. %",
+            "future impact time span", "future impact time span %",
+            "future impact count %"
+        ]
 
         data = []
 
@@ -161,14 +157,18 @@ class BugIntroducingEvaluationTable(Table):
 def _evaluate_fixing_commits(
     project_name: str, start_date: datetime, rawbugs: tp.FrozenSet[RawBug],
     input_fixing_commits: tp.Set[str]
-) -> tp.Tuple[int, tp.Set[str], tp.Set[str], tp.Set[str], tp.Set[str]]:
+) -> tp.Tuple[tp.Set[str], tp.Set[str], tp.Set[str], tp.Set[str], tp.Set[str],
+              tp.Set[str], tp.Set[str]]:
     """
     Output format:
 
-    Count of commits total, Set of true positives, Set of false positives, Set
-    of true negatives, Set of false negatives
+    ( Set of commits in timespan, Set of true fixes in timespan, Set of found
+    fixes in timespan, Set of true positives, Set of false positives, Set of
+    true negatives, Set of false negatives )
     """
     project_repo = get_local_project_git(project_name)
+
+    total_commits: tp.Set[str] = set()
 
     # sets of commit hashes for each category
     found_fixing_commits: tp.Set[str] = set()
@@ -184,7 +184,6 @@ def _evaluate_fixing_commits(
             true_fixing_commits.add(commit_hash)
 
     # also count total commits here
-    commit_count = 0
     found_non_fixing_commits: tp.Set[str] = set()
     for commit in project_repo.walk(
         project_repo.head.target.hex, pygit2.GIT_SORT_TIME
@@ -193,7 +192,7 @@ def _evaluate_fixing_commits(
             break
         if commit.hex not in found_fixing_commits:
             found_non_fixing_commits.add(commit.hex)
-        commit_count = commit_count + 1
+        total_commits.add(commit.hex)
 
     # count bugs that are correctly labelled as fixing
     tp_commits = set()
@@ -219,7 +218,48 @@ def _evaluate_fixing_commits(
         if commit in true_fixing_commits:
             fn_commits.add(commit)
 
-    return (commit_count, tp_commits, fp_commits, tn_commits, fn_commits)
+    return (
+        total_commits, true_fixing_commits, found_fixing_commits, tp_commits,
+        fp_commits, tn_commits, fn_commits
+    )
+
+
+def _get_passing_fraction_future_impact_count(
+    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+) -> float:
+    """Returns the fraction of how many introducing commits pass the future
+    impact threshold (count of future bugs)."""
+
+
+def _get_passing_fraction_future_impact_time_span(
+    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+) -> float:
+    """Returns the fraction of how many introducing commits pass the future
+    impact threshold (time span of future bugs)."""
+
+
+def _get_passing_fraction_realism_of_introduction(
+    pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+) -> float:
+    """Returns the fraction of how many fixing commits pass the realism of bug
+    introduction threshold."""
+
+
+def _count_commit_message_and_issue_event_bugs(
+    pybugs: tp.FrozenSet[PygitBug]
+) -> tp.Tuple[int, int]:
+    """Counts the bugs found by commit messages and the bugs found by issue
+    events."""
+    message_bugs = 0
+    issue_bugs = 0
+
+    for pybug in pybugs:
+        if pybug.issue_id:
+            issue_bugs = issue_bugs + 1
+        else:
+            message_bugs = message_bugs + 1
+
+    return (message_bugs, issue_bugs)
 
 
 def _compute_future_impact_count() -> tp.Tuple[float, float]:
