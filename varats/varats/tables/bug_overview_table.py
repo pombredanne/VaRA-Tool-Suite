@@ -97,10 +97,18 @@ class BugFixingEvaluationTable(Table):
         ]
         rawbugs = bug_provider.find_all_raw_bugs()
 
+        fixing_eval = _evaluate_fixing_commits(
+            project_name, start_date, rawbugs, input_fixing_commits
+        )
+
         data = [
-            _compute_fixing_evaluation_row(
-                project_name, start_date, rawbugs, input_fixing_commits
-            )
+            fixing_eval[0],
+            len(input_fixing_commits),
+            len(rawbugs),
+            len(fixing_eval[1]),
+            len(fixing_eval[2]),
+            len(fixing_eval[3]),
+            len(fixing_eval[4])
         ]
 
         eval_df = pd.DataFrame(data=np.array(data), columns=variables)
@@ -150,12 +158,15 @@ class BugIntroducingEvaluationTable(Table):
         return wrap_table_in_document(table=table, landscape=True)
 
 
-def _compute_fixing_evaluation_row(
+def _evaluate_fixing_commits(
     project_name: str, start_date: datetime, rawbugs: tp.FrozenSet[RawBug],
     input_fixing_commits: tp.Set[str]
-) -> tp.List[int]:
+) -> tp.Tuple[int, tp.Set[str], tp.Set[str], tp.Set[str], tp.Set[str]]:
     """
-    Format: commits total, true fixes, fixes found, tp, fp, tn, fn
+    Output format:
+
+    Count of commits total, Set of true positives, Set of false positives, Set
+    of true negatives, Set of false negatives
     """
     project_repo = get_local_project_git(project_name)
 
@@ -208,15 +219,7 @@ def _compute_fixing_evaluation_row(
         if commit in true_fixing_commits:
             fn_commits.add(commit)
 
-    return [
-        commit_count,
-        len(true_fixing_commits),
-        len(found_fixing_commits),
-        len(tp_commits),
-        len(fp_commits),
-        len(tn_commits),
-        len(fn_commits)
-    ]
+    return (commit_count, tp_commits, fp_commits, tn_commits, fn_commits)
 
 
 def _compute_future_impact_count() -> tp.Tuple[float, float]:
