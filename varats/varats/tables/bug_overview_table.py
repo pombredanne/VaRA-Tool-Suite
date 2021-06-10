@@ -105,11 +105,6 @@ class BugFixingEvaluationTable(Table):
             len(fixing_eval[i]) for i in range(len(variables))
         ]]
 
-        print(data)
-        print(len(data))
-        print(variables)
-        print(len(variables))
-
         eval_df = pd.DataFrame(data=np.array(data), columns=variables)
 
         if self.format in [
@@ -150,9 +145,8 @@ class BugIntroducingEvaluationTable(Table):
         pybugs = bug_provider.find_all_pygit_bugs()
 
         variables = [
-            "realism of intro.", "realism of intro. %",
-            "future impact time span", "future impact time span %",
-            "future impact count", "future impact count %"
+            "realism intro", "realism intro %", "futimp time span",
+            "futimp time span %", "futimp count", "futimp count %"
         ]
 
         pybug_filtered = _get_bugs_fixed_after_threshold(pybugs, start_date)
@@ -176,11 +170,11 @@ class BugIntroducingEvaluationTable(Table):
             med_tuple_impact_count[1]
         )
 
-        data = [
+        data = [[
             med_tuple_realism[0], passed_realism, med_tuple_impact_time_span[0],
             passed_impact_time_span, med_tuple_impact_count[0],
             passed_impact_count
-        ]
+        ]]
 
         eval_df = pd.DataFrame(data=data, columns=variables)
 
@@ -277,7 +271,7 @@ def _get_passing_fraction_future_impact_count(
         if len(fixing_commits) <= median + mad:
             passing_intros = passing_intros + 1
 
-    return float(passing_intros) / float(intro_dict.keys())
+    return float(passing_intros) / float(len(intro_dict.keys()))
 
 
 def _get_passing_fraction_future_impact_time_span(
@@ -286,6 +280,7 @@ def _get_passing_fraction_future_impact_time_span(
     """Returns the fraction of how many introducing commits pass the future
     impact threshold (time span of future bugs)."""
     intro_dict = _get_intro_dict(project_name, pybugs)
+    project_repo = get_local_project_git(project_name)
 
     passing_intros = 0
     for introducer, fixing_commits in intro_dict.items():
@@ -309,7 +304,7 @@ def _get_passing_fraction_future_impact_time_span(
         if passed:
             passing_intros = passing_intros + 1
 
-    return float(passing_intros) / float(intro_dict.keys())
+    return float(passing_intros) / float(len(intro_dict.keys()))
 
 
 def _get_passing_fraction_realism_of_introduction(
