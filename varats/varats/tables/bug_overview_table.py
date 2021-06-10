@@ -101,7 +101,14 @@ class BugFixingEvaluationTable(Table):
             project_name, start_date, rawbugs, input_fixing_commits
         )
 
-        data = [len(fixing_eval[i]) for i in range(len(variables))]
+        data: tp.List[int] = [[
+            len(fixing_eval[i]) for i in range(len(variables))
+        ]]
+
+        print(data)
+        print(len(data))
+        print(variables)
+        print(len(variables))
 
         eval_df = pd.DataFrame(data=np.array(data), columns=variables)
 
