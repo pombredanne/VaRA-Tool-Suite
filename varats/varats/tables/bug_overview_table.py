@@ -6,6 +6,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 import pygit2
+from scipy import stats
 from tabulate import tabulate
 
 from varats.project.project_util import (
@@ -134,7 +135,7 @@ class BugIntroducingEvaluationTable(Table):
 
         variables = ["message bugs", "issue bugs", "realism of intro."]
 
-        data = [_compute_introducing_evaluation_row(pybugs)]
+        data = []
 
         eval_df = pd.DataFrame(data=data, columns=variables)
 
@@ -218,25 +219,77 @@ def _compute_fixing_evaluation_row(
     ]
 
 
-def _compute_introducing_evaluation_row(
+def _compute_future_impact_count() -> tp.Tuple[float, float]:
+    """
+    Returns the median time difference and median absolute deviation between bug
+    introductions and their fixes. Result determines the future impact of
+    changes (count of future bugs). Note that this is statically set to (3,0)
+    for all projects and exists for abstraction purposes.
+
+    Args:
+        pybugs: The set of bugs to analyze
+
+    Returns:
+        A tuple (median, median absolute deviation)
+    """
+    return (3.0, 0.0)
+
+
+def _compute_future_impact_time_span(
     pybugs: tp.FrozenSet[PygitBug]
-) -> tp.List[int]:
+) -> tp.Tuple[float, float]:
     """
-    Format: commit message bugs, issue event bugs, realism of bug introduction
-    (in days)
+    Computes the median time difference and median absolute deviation between
+    bug introductions and their fixes. Result determines the future impact of
+    changes (time span of future bugs).
+
+    Args:
+        pybugs: The set of bugs to analyze
+
+    Returns:
+        A tuple (median, median absolute deviation)
     """
-    message_bugs = 0
-    issue_bugs = 0
     date_differences: tp.List[int] = []
     for pybug in pybugs:
-        if pybug.issue_id:
-            issue_bugs = issue_bugs + 1
-        else:
-            message_bugs = message_bugs + 1
-
         fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
         for introducer in pybug.introducing_commits:
             intro_date = datetime.fromtimestamp(introducer.commit_time)
             date_differences.append((fixing_date - intro_date).days)
 
-    return [message_bugs, issue_bugs, statistics.median(date_differences)]
+    return (
+        statistics.median(date_differences),
+        stats.median_abs_deviation(date_differences)
+    )
+
+
+def _compute_realism_of_introduction(
+    pybugs: tp.FrozenSet[PygitBug]
+) -> tp.Tuple[float, float]:
+    """
+    Computes the median time difference and median absolute deviation between
+    the introductions of the same fix. Result determines the realism of bug
+    introduction.
+
+    Args:
+        pybugs: The set of bugs to analyze
+
+    Returns:
+        A tuple (median, median absolute deviation)
+    """
+    date_differences: tp.List[int] = []
+    for pybug in pybugs:
+        for introducer_a in pybug.introducing_commits:
+            introducer_a_date = datetime.fromtimestamp(introducer_a.commit_time)
+            for introducer_b in pybug.introducing_commits:
+                introducer_b_date = datetime.fromtimestamp(
+                    introducer_b.commit_time
+                )
+
+                date_differences.append(
+                    abs(introducer_a_date - introducer_b_date).days
+                )
+
+    return (
+        statistics.median(date_differences),
+        stats.median_abs_deviation(date_differences)
+    )
