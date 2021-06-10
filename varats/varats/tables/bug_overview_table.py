@@ -161,7 +161,7 @@ class BugIntroducingEvaluationTable(Table):
         med_tuple_impact_time_span = _compute_future_impact_time_span(
             pybug_filtered
         )
-        med_tuple_impact_count = _compute_future_impact_count(pybug_filtered)
+        med_tuple_impact_count = _compute_future_impact_count()
 
         passed_realism = _get_passing_fraction_realism_of_introduction(
             project_name, pybug_filtered, med_tuple_realism[0],
@@ -273,7 +273,7 @@ def _get_passing_fraction_future_impact_count(
     intro_dict = _get_intro_dict(project_name, pybugs)
 
     passing_intros: int = 0
-    for introducer, fixing_commits in intro_dict:
+    for introducer, fixing_commits in intro_dict.items():
         if len(fixing_commits) <= median + mad:
             passing_intros = passing_intros + 1
 
@@ -288,7 +288,7 @@ def _get_passing_fraction_future_impact_time_span(
     intro_dict = _get_intro_dict(project_name, pybugs)
 
     passing_intros = 0
-    for introducer, fixing_commits in intro_dict:
+    for introducer, fixing_commits in intro_dict.items():
         introducer_pycommit: pygit2.Commit = project_repo.revparse_single(
             introducer
         )
