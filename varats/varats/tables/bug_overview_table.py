@@ -353,7 +353,7 @@ def _get_bugs_fixed_after_threshold(
 
     for pybug in pybugs:
         fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
-        if fixing_date < start_date:
+        if fixing_date >= start_date:
             resulting_pybugs.add(pybug)
 
     return frozenset(resulting_pybugs)
