@@ -189,6 +189,28 @@ class BugIntroducingEvaluationTable(Table):
         return wrap_table_in_document(table=table, landscape=True)
 
 
+class SZZComparisonTable(Table):
+    """Table that compares the bug data of the szz approaches SZZUnleashed and
+    BugProvider."""
+
+    NAME = "szz_comparison"
+
+    def __init__(self, **kwargs: tp.Any):
+        super().__init__(self.NAME, **kwargs)
+
+    def tabulate(self) -> str:
+        project_name = self.table_kwargs["project"]
+
+        bug_provider = BugProvider.get_provider_for_project(
+            get_project_cls_by_name(project_name)
+        )
+
+        provider_pybugs = bug_provider.find_all_pygit_bugs()
+
+    def wrap_table(self, table: str) -> str:
+        return wrap_table_in_document(table=table, landscape=True)
+
+
 def _evaluate_fixing_commits(
     project_name: str, start_date: datetime, rawbugs: tp.FrozenSet[RawBug],
     input_fixing_commits: tp.Set[str]
