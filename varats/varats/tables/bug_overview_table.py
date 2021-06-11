@@ -428,7 +428,7 @@ def _get_passing_fraction_realism_of_introduction(
                 intro_hash_a
             )
             intro_a_date = datetime.fromtimestamp(introducer_a.commit_time)
-            for intro_hash_b in pybug.introducing_commits:
+            for intro_hash_b in rawbug.introducing_commits:
                 introducer_b: pygit2.Commit = project_repo.revparse_single(
                     intro_hash_b
                 )
@@ -440,17 +440,17 @@ def _get_passing_fraction_realism_of_introduction(
         if passed:
             passing_fixes = passing_fixes + 1
 
-    return float(passing_fixes) / float(len(pybugs))
+    return float(passing_fixes) / float(len(rawbugs))
 
 
 def _get_intro_dict(project_name: str,
-                    pybugs: tp.FrozenSet[RawBug]) -> tp.Dict[str, tp.Set[str]]:
+                    rawbugs: tp.FrozenSet[RawBug]) -> tp.Dict[str, tp.Set[str]]:
     intro_dict: tp.Dict[str, tp.Set[str]] = {}
     project_repo = get_local_project_git(project_name)
 
-    for pybug in pybugs:
-        fix_hash = pybug.fixing_commit
-        for introducer in pybug.introducing_commits:
+    for rawbug in rawbugs:
+        fix_hash = rawbug.fixing_commit
+        for introducer in rawbug.introducing_commits:
             if introducer not in intro_dict.keys():
                 intro_dict[introducer] = set()
             intro_dict[introducer].add(fix_hash)
@@ -462,7 +462,7 @@ def _get_bugs_fixed_after_threshold(
     project_name: str, rawbugs: tp.FrozenSet[RawBug], start_date: datetime
 ) -> tp.FrozenSet[RawBug]:
     project_repo = get_local_project_git(project_name)
-    rawbugs: tp.Set[RawBug] = set()
+    resulting_rawbugs: tp.Set[RawBug] = set()
 
     for rawbug in rawbugs:
         pyfix: pygit2.Commit = project_repo.revparse_single(
@@ -470,7 +470,7 @@ def _get_bugs_fixed_after_threshold(
         )
         fixing_date = datetime.fromtimestamp(pyfix.commit_time)
         if fixing_date >= start_date:
-            resulting_rawbugs.add(pybug)
+            resulting_rawbugs.add(rawbug)
 
     return frozenset(resulting_rawbugs)
 
@@ -561,7 +561,7 @@ def _compute_realism_of_introduction(
         for intro_hash_a in rawbug.introducing_commits:
             introducer_a = project_repo.revparse_single(intro_hash_a)
             introducer_a_date = datetime.fromtimestamp(introducer_a.commit_time)
-            for intro_hash_b in pybug.introducing_commits:
+            for intro_hash_b in rawbug.introducing_commits:
                 introducer_b = project_repo.revparse_single(intro_hash_b)
                 introducer_b_date = datetime.fromtimestamp(
                     introducer_b.commit_time
