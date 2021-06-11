@@ -95,6 +95,7 @@ class BugFixingEvaluationTable(Table):
             "commits total", "true fixes", "fixes found", "true positive",
             "false positive", "true negative", "false negative"
         ]
+        annotations = ["fix(e[ds])?"]
         rawbugs = bug_provider.find_all_raw_bugs()
 
         fixing_eval = _evaluate_fixing_commits(
@@ -105,7 +106,7 @@ class BugFixingEvaluationTable(Table):
             len(fixing_eval[i]) for i in range(len(variables))
         ]]
 
-        eval_df = pd.DataFrame(data=np.array(data), columns=variables)
+        eval_df = pd.DataFrame(data=data, columns=variables, index=annotations)
 
         if self.format in [
             TableFormat.latex, TableFormat.latex_raw, TableFormat.latex_booktabs
@@ -148,6 +149,7 @@ class BugIntroducingEvaluationTable(Table):
             "realism intro", "realism intro %", "futimp time span",
             "futimp time span %", "futimp count", "futimp count %"
         ]
+        annotations = ["fix(e[ds])?"]
 
         pybug_filtered = _get_bugs_fixed_after_threshold(pybugs, start_date)
 
@@ -176,7 +178,7 @@ class BugIntroducingEvaluationTable(Table):
             passed_impact_count
         ]]
 
-        eval_df = pd.DataFrame(data=data, columns=variables)
+        eval_df = pd.DataFrame(data=data, columns=variables, index=annotations)
 
         if self.format in [
             TableFormat.latex, TableFormat.latex_raw, TableFormat.latex_booktabs
