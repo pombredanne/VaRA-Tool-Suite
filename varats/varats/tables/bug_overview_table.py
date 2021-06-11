@@ -9,12 +9,14 @@ import pygit2
 from scipy import stats
 from tabulate import tabulate
 
+from varats.data.reports.szz_report import SZZUnleashedReport
 from varats.project.project_util import (
     get_project_cls_by_name,
     get_local_project_git,
 )
 from varats.provider.bug.bug import RawBug, PygitBug
 from varats.provider.bug.bug_provider import BugProvider
+from varats.revision.revisions import get_processed_revisions_files
 from varats.table.table import Table, TableFormat, wrap_table_in_document
 
 
@@ -143,7 +145,7 @@ class BugIntroducingEvaluationTable(Table):
         bug_provider = BugProvider.get_provider_for_project(
             get_project_cls_by_name(project_name)
         )
-        pybugs = bug_provider.find_all_pygit_bugs()
+        rawbugs = bug_provider.find_all_raw_bugs()
 
         variables = [
             "realism intro", "realism intro %", "futimp time span",
@@ -151,24 +153,28 @@ class BugIntroducingEvaluationTable(Table):
         ]
         annotations = ["fix(e[ds])?"]
 
-        pybug_filtered = _get_bugs_fixed_after_threshold(pybugs, start_date)
+        rawbugs_filtered = _get_bugs_fixed_after_threshold(
+            project_name, rawbugs, start_date
+        )
 
-        med_tuple_realism = _compute_realism_of_introduction(pybug_filtered)
+        med_tuple_realism = _compute_realism_of_introduction(
+            project_name, rawbugs_filtered
+        )
         med_tuple_impact_time_span = _compute_future_impact_time_span(
-            pybug_filtered
+            project_name, rawbugs_filtered
         )
         med_tuple_impact_count = _compute_future_impact_count()
 
         passed_realism = _get_passing_fraction_realism_of_introduction(
-            project_name, pybug_filtered, med_tuple_realism[0],
+            project_name, rawbugs_filtered, med_tuple_realism[0],
             med_tuple_realism[1]
         )
         passed_impact_time_span = _get_passing_fraction_future_impact_time_span(
-            project_name, pybug_filtered, med_tuple_impact_time_span[0],
+            project_name, rawbugs_filtered, med_tuple_impact_time_span[0],
             med_tuple_impact_time_span[1]
         )
         passed_impact_count = _get_passing_fraction_future_impact_count(
-            project_name, pybug_filtered, med_tuple_impact_count[0],
+            project_name, rawbugs_filtered, med_tuple_impact_count[0],
             med_tuple_impact_count[1]
         )
 
@@ -207,7 +213,83 @@ class SZZComparisonTable(Table):
             get_project_cls_by_name(project_name)
         )
 
-        provider_pybugs = bug_provider.find_all_pygit_bugs()
+        provider_rawbugs = bug_provider.find_all_raw_bugs()
+
+        reports = get_processed_revisions_files(
+            project_name, SZZUnleashedReport
+        )
+        szzunleashed_rawbugs = SZZUnleashedReport(reports[0]).get_all_raw_bugs()
+
+        med_provider_realism = _compute_realism_of_introduction(
+            project_name, provider_rawbugs
+        )
+        med_unleashed_realism = _compute_realism_of_introduction(
+            project_name, szzunleashed_rawbugs
+        )
+
+        med_provider_impact_time_span = _compute_future_impact_time_span(
+            project_name, provider_rawbugs
+        )
+        med_unleashed_impact_time_span = _compute_future_impact_time_span(
+            project_name, szzunleashed_rawbugs
+        )
+
+        med_provider_impact_count = _compute_future_impact_count()
+        med_unleashed_impact_count = _compute_future_impact_count()
+
+        passed_provider_realism = _get_passing_fraction_realism_of_introduction(
+            project_name, provider_rawbugs, med_provider_realism[0],
+            med_provider_realism[1]
+        )
+        passed_unleashed_realism = _get_passing_fraction_realism_of_introduction(
+            project_name, szzunleashed_rawbugs, med_unleashed_realism[0],
+            med_unleashed_realism[1]
+        )
+
+        passed_provider_impact_time_span = _get_passing_fraction_future_impact_time_span(
+            project_name, provider_rawbugs, med_provider_impact_time_span[0],
+            med_provider_impact_time_span[1]
+        )
+        passed_unleashed_impact_time_span = _get_passing_fraction_future_impact_time_span(
+            project_name, szzunleashed_rawbugs,
+            med_unleashed_impact_time_span[0], med_unleashed_impact_time_span[1]
+        )
+
+        passed_provider_impact_count = _get_passing_fraction_future_impact_count(
+            project_name, provider_rawbugs, med_provider_impact_count[0],
+            med_provider_impact_count[1]
+        )
+        passed_unleashed_impact_count = _get_passing_fraction_future_impact_count(
+            project_name, szzunleashed_rawbugs, med_unleashed_impact_count[0],
+            med_unleashed_impact_count[1]
+        )
+
+        variables = [
+            "realism intro", "realism intro %", "futimp time span",
+            "futimp time span %", "futimp count", "futimp count %"
+        ]
+        annotations = ["bugprovider", "szzunleashed"]
+
+        data = [[
+            med_provider_realism[0], passed_provider_realism,
+            med_provider_impact_time_span[0], passed_provider_impact_time_span,
+            med_provider_impact_count[0], passed_provider_impact_count
+        ],
+                [
+                    med_unleashed_realism[0], passed_unleashed_realism,
+                    med_unleashed_impact_time_span[0],
+                    passed_unleashed_impact_time_span,
+                    med_unleashed_impact_count[0], passed_unleashed_impact_count
+                ]]
+
+        eval_df = pd.DataFrame(data=data, columns=variables, index=annotations)
+
+        if self.format in [
+            TableFormat.latex, TableFormat.latex_raw, TableFormat.latex_booktabs
+        ]:
+            tex_code = eval_df.to_latex(bold_rows=True, multicolumn_format="c")
+            return str(tex_code) if tex_code else ""
+        return tabulate(eval_df, eval_df.columns, self.format.value)
 
     def wrap_table(self, table: str) -> str:
         return wrap_table_in_document(table=table, landscape=True)
@@ -284,11 +366,11 @@ def _evaluate_fixing_commits(
 
 
 def _get_passing_fraction_future_impact_count(
-    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, rawbugs: tp.FrozenSet[RawBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many introducing commits pass the future
     impact threshold (count of future bugs)."""
-    intro_dict = _get_intro_dict(project_name, pybugs)
+    intro_dict = _get_intro_dict(project_name, rawbugs)
 
     passing_intros: int = 0
     for introducer, fixing_commits in intro_dict.items():
@@ -299,11 +381,11 @@ def _get_passing_fraction_future_impact_count(
 
 
 def _get_passing_fraction_future_impact_time_span(
-    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, rawbugs: tp.FrozenSet[RawBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many introducing commits pass the future
     impact threshold (time span of future bugs)."""
-    intro_dict = _get_intro_dict(project_name, pybugs)
+    intro_dict = _get_intro_dict(project_name, rawbugs)
     project_repo = get_local_project_git(project_name)
 
     passing_intros = 0
@@ -332,16 +414,24 @@ def _get_passing_fraction_future_impact_time_span(
 
 
 def _get_passing_fraction_realism_of_introduction(
-    project_name: str, pybugs: tp.FrozenSet[PygitBug], median: float, mad: float
+    project_name: str, rawbugs: tp.FrozenSet[RawBug], median: float, mad: float
 ) -> float:
     """Returns the fraction of how many fixing commits pass the realism of bug
     introduction threshold."""
+    project_repo = get_local_project_git(project_name)
+
     passing_fixes = 0
-    for pybug in pybugs:
+    for rawbug in rawbugs:
         passed = True
-        for introducer_a in pybug.introducing_commits:
+        for intro_hash_a in rawbug.introducing_commits:
+            introducer_a: pygit2.Commit = project_repo.revparse_single(
+                intro_hash_a
+            )
             intro_a_date = datetime.fromtimestamp(introducer_a.commit_time)
-            for introducer_b in pybug.introducing_commits:
+            for intro_hash_b in pybug.introducing_commits:
+                introducer_b: pygit2.Commit = project_repo.revparse_single(
+                    intro_hash_b
+                )
                 intro_b_date = datetime.fromtimestamp(introducer_b.commit_time)
 
                 if (abs(intro_b_date - intro_a_date).days > median + mad):
@@ -353,46 +443,48 @@ def _get_passing_fraction_realism_of_introduction(
     return float(passing_fixes) / float(len(pybugs))
 
 
-def _get_intro_dict(
-    project_name: str, pybugs: tp.FrozenSet[PygitBug]
-) -> tp.Dict[str, tp.Set[str]]:
+def _get_intro_dict(project_name: str,
+                    pybugs: tp.FrozenSet[RawBug]) -> tp.Dict[str, tp.Set[str]]:
     intro_dict: tp.Dict[str, tp.Set[str]] = {}
     project_repo = get_local_project_git(project_name)
 
     for pybug in pybugs:
-        fix_hash = pybug.fixing_commit.hex
+        fix_hash = pybug.fixing_commit
         for introducer in pybug.introducing_commits:
-            intro_hash = introducer.hex
-            if intro_hash not in intro_dict.keys():
-                intro_dict[intro_hash] = set()
-            intro_dict[intro_hash].add(fix_hash)
+            if introducer not in intro_dict.keys():
+                intro_dict[introducer] = set()
+            intro_dict[introducer].add(fix_hash)
 
     return intro_dict
 
 
 def _get_bugs_fixed_after_threshold(
-    pybugs: tp.FrozenSet[PygitBug], start_date: datetime
-) -> tp.FrozenSet[PygitBug]:
-    resulting_pybugs: tp.Set[PygitBug] = set()
+    project_name: str, rawbugs: tp.FrozenSet[RawBug], start_date: datetime
+) -> tp.FrozenSet[RawBug]:
+    project_repo = get_local_project_git(project_name)
+    rawbugs: tp.Set[RawBug] = set()
 
-    for pybug in pybugs:
-        fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
+    for rawbug in rawbugs:
+        pyfix: pygit2.Commit = project_repo.revparse_single(
+            rawbug.fixing_commit
+        )
+        fixing_date = datetime.fromtimestamp(pyfix.commit_time)
         if fixing_date >= start_date:
-            resulting_pybugs.add(pybug)
+            resulting_rawbugs.add(pybug)
 
-    return frozenset(resulting_pybugs)
+    return frozenset(resulting_rawbugs)
 
 
 def _count_commit_message_and_issue_event_bugs(
-    pybugs: tp.FrozenSet[PygitBug]
+    rawbugs: tp.FrozenSet[RawBug]
 ) -> tp.Tuple[int, int]:
     """Counts the bugs found by commit messages and the bugs found by issue
     events."""
     message_bugs = 0
     issue_bugs = 0
 
-    for pybug in pybugs:
-        if pybug.issue_id:
+    for rawbug in rawbugs:
+        if rawbug.issue_id:
             issue_bugs = issue_bugs + 1
         else:
             message_bugs = message_bugs + 1
@@ -408,7 +500,7 @@ def _compute_future_impact_count() -> tp.Tuple[float, float]:
     for all projects and exists for abstraction purposes.
 
     Args:
-        pybugs: The set of bugs to analyze
+        rawbugs: The set of bugs to analyze
 
     Returns:
         A tuple (median, median absolute deviation)
@@ -417,7 +509,7 @@ def _compute_future_impact_count() -> tp.Tuple[float, float]:
 
 
 def _compute_future_impact_time_span(
-    pybugs: tp.FrozenSet[PygitBug]
+    project_name: str, rawbugs: tp.FrozenSet[RawBug]
 ) -> tp.Tuple[float, float]:
     """
     Computes the median time difference and median absolute deviation between
@@ -425,16 +517,22 @@ def _compute_future_impact_time_span(
     changes (time span of future bugs).
 
     Args:
-        pybugs: The set of bugs to analyze
+        rawbugs: The set of bugs to analyze
 
     Returns:
         A tuple (median, median absolute deviation)
     """
+    project_repo = get_local_project_git(project_name)
+
     date_differences: tp.List[int] = []
-    for pybug in pybugs:
-        fixing_date = datetime.fromtimestamp(pybug.fixing_commit.commit_time)
-        for introducer in pybug.introducing_commits:
-            intro_date = datetime.fromtimestamp(introducer.commit_time)
+    for rawbug in rawbugs:
+        pyfix: pygit2.Commit = project_repo.revparse_single(
+            rawbug.fixing_commit
+        )
+        fixing_date = datetime.fromtimestamp(pyfix.commit_time)
+        for introducer in rawbug.introducing_commits:
+            pyntro: pygit2.Commit = project_repo.revparse_single(introducer)
+            intro_date = datetime.fromtimestamp(pyntro.commit_time)
             date_differences.append((fixing_date - intro_date).days)
 
     return (
@@ -444,7 +542,7 @@ def _compute_future_impact_time_span(
 
 
 def _compute_realism_of_introduction(
-    pybugs: tp.FrozenSet[PygitBug]
+    project_name: str, rawbugs: tp.FrozenSet[RawBug]
 ) -> tp.Tuple[float, float]:
     """
     Computes the median time difference and median absolute deviation between
@@ -452,16 +550,19 @@ def _compute_realism_of_introduction(
     introduction.
 
     Args:
-        pybugs: The set of bugs to analyze
+        rawbugs: The set of bugs to analyze
 
     Returns:
         A tuple (median, median absolute deviation)
     """
+    project_repo = get_local_project_git(project_name)
     date_differences: tp.List[int] = []
-    for pybug in pybugs:
-        for introducer_a in pybug.introducing_commits:
+    for rawbug in rawbugs:
+        for intro_hash_a in rawbug.introducing_commits:
+            introducer_a = project_repo.revparse_single(intro_hash_a)
             introducer_a_date = datetime.fromtimestamp(introducer_a.commit_time)
-            for introducer_b in pybug.introducing_commits:
+            for intro_hash_b in pybug.introducing_commits:
+                introducer_b = project_repo.revparse_single(intro_hash_b)
                 introducer_b_date = datetime.fromtimestamp(
                     introducer_b.commit_time
                 )
