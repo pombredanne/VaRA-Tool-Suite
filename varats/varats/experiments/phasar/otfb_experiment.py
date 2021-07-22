@@ -92,7 +92,7 @@ class OtfbExperiment(VersionExperiment):
 
     REPORT_TYPE = ReportSpecification(EmptyReport)
 
-    def actions_for_project(self, project: Project) -> tp.List[actions.Step]:
+    def actions_for_project(self, project: Project) -> tp.MutableSequence[actions.Step]:
         """
         Returns the specified steps to run the project(s) specified in the call
         in a fixed order.
@@ -121,7 +121,7 @@ class OtfbExperiment(VersionExperiment):
         analysis_actions += get_bc_cache_actions(
             project,
             extraction_error_handler=create_default_compiler_error_handler(
-                project, self.REPORT_TYPE
+                project, self.REPORT_TYPE.main_report
             )
         )
 
