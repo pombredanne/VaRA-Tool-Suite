@@ -46,7 +46,7 @@ class Otfb(actions.Step):  # type: ignore
     def analyze(self) -> actions.StepResult:
         """Run phasar's IDELinearConstantAnalysis analysis."""
         if not self.obj:
-            return
+            return actions.StepResult.ERROR
         project = self.obj
 
         # Add to the user-defined path for saving the results of the
@@ -68,7 +68,7 @@ class Otfb(actions.Step):  # type: ignore
                 binary_name=binary.name,
                 project_version=project.version_of_primary,
                 project_uuid=str(project.run_uuid),
-                extension_type=FSE.Success
+                extension_type=FSE.SUCCESS
             )
 
             phasar_params = [bc_file]
@@ -92,7 +92,9 @@ class OtfbExperiment(VersionExperiment):
 
     REPORT_SPEC = ReportSpecification(EmptyReport)
 
-    def actions_for_project(self, project: Project) -> tp.MutableSequence[actions.Step]:
+    def actions_for_project(
+        self, project: Project
+    ) -> tp.MutableSequence[actions.Step]:
         """
         Returns the specified steps to run the project(s) specified in the call
         in a fixed order.
