@@ -90,7 +90,7 @@ class OtfbExperiment(VersionExperiment):
 
     NAME = "PhasarOtfb"
 
-    REPORT_TYPE = ReportSpecification(EmptyReport)
+    REPORT_SPEC = ReportSpecification(EmptyReport)
 
     def actions_for_project(self, project: Project) -> tp.MutableSequence[actions.Step]:
         """
@@ -121,7 +121,7 @@ class OtfbExperiment(VersionExperiment):
         analysis_actions += get_bc_cache_actions(
             project,
             extraction_error_handler=create_default_compiler_error_handler(
-                project, self.REPORT_TYPE.main_report
+                project, self.REPORT_SPEC.main_report
             )
         )
 
