@@ -23,6 +23,7 @@ from varats.experiment.wllvm import (
     get_bc_cache_actions,
 )
 from varats.report.report import FileStatusExtension as FSE
+from varats.report.report import ReportSpecification
 from varats.utils.settings import bb_cfg
 
 
@@ -89,7 +90,7 @@ class OtfbExperiment(VersionExperiment):
 
     NAME = "PhasarOtfb"
 
-    REPORT_TYPE = EmptyReport
+    REPORT_TYPE = ReportSpecification(EmptyReport)
 
     def actions_for_project(self, project: Project) -> tp.List[actions.Step]:
         """
