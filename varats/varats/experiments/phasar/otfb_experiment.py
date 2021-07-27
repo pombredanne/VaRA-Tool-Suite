@@ -2,9 +2,9 @@
 import typing as tp
 from pathlib import Path
 
-import benchbuild.utils.actions as actions
 from benchbuild import Project
 from benchbuild.extensions import compiler, run, time
+from benchbuild.utils import actions
 from benchbuild.utils.cmd import mkdir
 from plumbum import local
 
@@ -23,6 +23,7 @@ from varats.experiment.wllvm import (
     get_bc_cache_actions,
 )
 from varats.report.report import FileStatusExtension as FSE
+from varats.report.report import ReportSpecification
 from varats.utils.settings import bb_cfg
 
 
@@ -83,13 +84,15 @@ class Otfb(actions.Step):  # type: ignore
                 )
             )
 
+        return actions.StepResult.OK
+
 
 class OtfbExperiment(VersionExperiment):
     """Experiment class to build and analyse a project."""
 
     NAME = "PhasarOtfb"
 
-    REPORT_TYPE = EmptyReport
+    REPORT_SPEC = ReportSpecification(EmptyReport)
 
     def actions_for_project(
         self, project: Project
@@ -122,7 +125,7 @@ class OtfbExperiment(VersionExperiment):
         analysis_actions += get_bc_cache_actions(
             project,
             extraction_error_handler=create_default_compiler_error_handler(
-                project, self.REPORT_TYPE
+                project, self.REPORT_SPEC.main_report
             )
         )
 
