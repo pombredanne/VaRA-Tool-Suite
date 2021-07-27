@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 
 import pygit2
-from benchbuild.utils.cmd import git
+from benchbuild.utils.cmd import git, wc
 from plumbum import local
 
 from varats.project.project_util import (
@@ -16,7 +16,7 @@ from varats.project.project_util import (
 )
 
 if tp.TYPE_CHECKING:
-    from varats.mapping.commit_map import CommitMap  # pylint: disable=W0611
+    import varats.mapping.commit_map as cm  # pylint: disable=W0611
 
 _FULL_COMMIT_HASH_LENGTH = 40
 _SHORT_COMMIT_HASH_LENGTH = 10
@@ -101,13 +101,13 @@ def commit_hashes_sorted_lexicographically(
 
 
 def short_commit_hashes_sorted_by_time_id(
-    commit_hashes: tp.Iterable[ShortCommitHash], commit_map: 'CommitMap'
+    commit_hashes: tp.Iterable[ShortCommitHash], commit_map: 'cm.CommitMap'
 ) -> tp.Iterable[ShortCommitHash]:
     return sorted(commit_hashes, key=commit_map.short_time_id)
 
 
 def full_commit_hashes_sorted_by_time_id(
-    commit_hashes: tp.Iterable[FullCommitHash], commit_map: 'CommitMap'
+    commit_hashes: tp.Iterable[FullCommitHash], commit_map: 'cm.CommitMap'
 ) -> tp.Iterable[FullCommitHash]:
     return sorted(commit_hashes, key=commit_map.time_id)
 
@@ -659,3 +659,34 @@ def __print_calc_repo_code_churn(
         if churn[0] > 0:
             print(changed_files + insertions + deletions)
             print()
+
+
+__WC_TOTAL_REGEX = re.compile(r"\s*(\d+)\s*total")
+
+
+def calc_repo_loc(repo: pygit2.Repository, rev_range: str) -> int:
+    """
+    Calculate the LOC for a project at its HEAD.
+
+    Args:
+        repo: the repository to calculate the LOC for
+
+    Returns:
+        the number of lines in source-code files
+    """
+    project_path = repo.path[:-5]
+    churn_config = ChurnConfig.create_c_style_languages_config()
+
+    loc: int = 0
+    with local.cwd(project_path):
+        wc_out = wc(
+            "-l",
+            *git(
+                "ls-files", rev_range, "--",
+                churn_config.get_extensions_repr("*.")
+            ).splitlines()
+        )
+        for match in __WC_TOTAL_REGEX.finditer(wc_out):
+            loc = int(match.group(1))
+
+    return loc
