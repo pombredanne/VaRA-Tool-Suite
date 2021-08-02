@@ -130,9 +130,8 @@ def get_result_files(
         are sorted descending by the file's mtime
     """
 
-    def file_name_filter(file_name: str) -> bool:
-        file_commit_hash = ReportFilename(file_name).commit_hash
-        return not file_commit_hash == commit_hash
+    def file_name_filter(file_name: ReportFilename) -> bool:
+        return not file_name.commit_hash == commit_hash
 
     return get_all_revisions_files(
         project_name, result_file_type, file_name_filter, only_newest

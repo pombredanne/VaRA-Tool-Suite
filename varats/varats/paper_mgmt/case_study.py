@@ -229,7 +229,7 @@ def get_newest_result_files_for_case_study(
 
 def get_case_study_file_name_filter(
     case_study: tp.Optional[CaseStudy]
-) -> tp.Callable[[str], bool]:
+) -> tp.Callable[[ReportFilename], bool]:
     """
     Generate a case study specific file-name filter function that allows the
     user to check if a file name is related to this case study.
@@ -239,7 +239,7 @@ def get_case_study_file_name_filter(
         file belongs to this case study
     """
 
-    def cs_filter(file_name: str) -> bool:
+    def cs_filter(file_name: ReportFilename) -> bool:
         """
         Filter files that are not in the case study.
 
@@ -250,9 +250,7 @@ def get_case_study_file_name_filter(
         if case_study is None:
             return False
 
-        return not case_study.has_revision(
-            ReportFilename(file_name).commit_hash
-        )
+        return not case_study.has_revision(file_name.commit_hash)
 
     return cs_filter
 

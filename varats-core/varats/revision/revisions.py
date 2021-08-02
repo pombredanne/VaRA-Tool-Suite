@@ -92,7 +92,7 @@ def __get_files_with_status(
     project_name: str,
     result_file_type: tp.Type[BaseReport],
     file_statuses: tp.List[FileStatusExtension],
-    file_name_filter: tp.Callable[[str], bool] = lambda x: False,
+    file_name_filter: tp.Callable[[ReportFilename], bool] = lambda x: False,
     only_newest: bool = True
 ) -> tp.List[Path]:
     """
@@ -121,9 +121,10 @@ def __get_files_with_status(
         if only_newest:
             sorted_res_files = [sorted_res_files[0]]
         for result_file in sorted_res_files:
-            if file_name_filter(result_file.name):
+            report_filename = ReportFilename(result_file)
+            if file_name_filter(report_filename):
                 continue
-            if ReportFilename(result_file.name).file_status in file_statuses:
+            if report_filename.file_status in file_statuses:
                 processed_revisions_paths.append(result_file)
 
     return processed_revisions_paths
@@ -132,7 +133,7 @@ def __get_files_with_status(
 def get_all_revisions_files(
     project_name: str,
     result_file_type: tp.Type[BaseReport],
-    file_name_filter: tp.Callable[[str], bool] = lambda x: False,
+    file_name_filter: tp.Callable[[ReportFilename], bool] = lambda x: False,
     only_newest: bool = True
 ) -> tp.List[Path]:
     """
@@ -160,7 +161,7 @@ def get_all_revisions_files(
 def get_processed_revisions_files(
     project_name: str,
     result_file_type: tp.Type[BaseReport],
-    file_name_filter: tp.Callable[[str], bool] = lambda x: False,
+    file_name_filter: tp.Callable[[ReportFilename], bool] = lambda x: False,
     only_newest: bool = True
 ) -> tp.List[Path]:
     """
@@ -187,7 +188,7 @@ def get_processed_revisions_files(
 def get_failed_revisions_files(
     project_name: str,
     result_file_type: tp.Type[BaseReport],
-    file_name_filter: tp.Callable[[str], bool] = lambda x: False,
+    file_name_filter: tp.Callable[[ReportFilename], bool] = lambda x: False,
     only_newest: bool = True
 ) -> tp.List[Path]:
     """
